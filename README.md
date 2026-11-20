@@ -8,3 +8,7 @@ mkdir "folder name"
 cd "folder name"
 npm init playwright@latest
 
+.env file
+ORANGE_USERNAME=Admin
+ORANGE_PASSWORD=admin123
+ORANGE_API_TOKEN="insert API token"
