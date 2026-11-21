@@ -11,4 +11,22 @@ npm init playwright@latest
 .env file
 ORANGE_USERNAME=Admin
 ORANGE_PASSWORD=admin123
-ORANGE_API_TOKEN="def50200cddc5bca19d07490c3fd964892b45924462bb7a64cead61052f5b57afcc172c013dbee43cbf2d00d906270fe13de301110b1cce8bbfd410081e500fee6ae4f7ae8fa0ee1a4da581b7b1d31397e60c546ef6ea198abb44ec1b359754827cf00eeccf5aace48f610c25bf0785fa862790b3932eddd9b57ce91e9418959eeba3a57dc797471a5e469757a680db0cf0d11f08f204c341b891a502604d11c28830081"
+ORANGE_API_TOKEN="new token every 30 minutes"
+
+Step 1: Login to OrangeHRM test website
+Step 2: Open Admin Menu
+Step 3: Go to Configuration then select Register OAuth Client
+Step 4: Click Add Button
+Step 5: Add Name
+Step 6: Add Redirect URL (https://pstmn.io)
+Step 7: Click Save
+Step 8: Go to Postman and click Authorization
+Step 9: Select OAuth 2.0
+Step 10: Select Grant Type: Authorization Code
+Step 11: Add your Callback URL, Auth URL, Access Token URL
+Step 12: Add your Client ID and Secret
+Step 13: Client Authentication: click send client credentials in body
+Step 14: Click Get New Access Token
+Step 15: Click Allow Access
+Step 16: Use Token
+
