@@ -8,11 +8,13 @@ mkdir "folder name"
 cd "folder name"
 npm init playwright@latest
 
+For the ADM-12.spec.ts
 .env file
 ORANGE_USERNAME=Admin
 ORANGE_PASSWORD=admin123
 ORANGE_API_TOKEN="new token every 30 minutes"
 
+For the ADM-12.spec.ts
 Step 1: Login to OrangeHRM test website
 Step 2: Open Admin Menu
 Step 3: Go to Configuration then select Register OAuth Client
