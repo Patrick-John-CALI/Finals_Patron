@@ -1,222 +1,151 @@
 import { Page, expect } from '@playwright/test';
 
-export class AdvancedAdminPage {
-  constructor(private page: Page) {}
+type UserRow = {
+  username: string;
+  role: string;
+  employeeName: string;
+  status: string;
+};
 
-  // Locate a filter group using its label
+export class AdvancedAdminPage {
+  constructor(private readonly page: Page) {}
+
   private filterGroup(label: string) {
     return this.page
       .locator('.oxd-input-group')
-      .filter({
-        has: this.page.getByText(label, { exact: true })
-      });
+      .filter({ has: this.page.getByText(label, { exact: true }) });
   }
 
-  // Select a custom dropdown option
-  async selectFilter(label: string, option: string) {
-    const dropdown = this.filterGroup(label)
-      .locator('.oxd-select-text');
+  async selectFilter(label: string, option: string): Promise<void> {
+    const group = this.filterGroup(label);
+    await expect(group, `Expected one filter group labelled "${label}"`).toHaveCount(1);
 
+    const dropdown = group.locator('.oxd-select-text');
     await expect(dropdown).toBeVisible();
     await dropdown.click();
 
     const optionLocator = this.page
       .locator('.oxd-select-dropdown .oxd-select-option')
-      .filter({
-        hasText: new RegExp(`^${option}$`)
-      });
+      .filter({ hasText: new RegExp(`^${option.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`) });
 
+    await expect(
+      optionLocator,
+      `Expected dropdown option "${option}" for "${label}"`
+    ).toHaveCount(1);
     await expect(optionLocator).toBeVisible();
     await optionLocator.click();
   }
 
-  // Filter users by User Role
-  async selectUserRole(role: string) {
+  async selectUserRole(role: string): Promise<void> {
     await this.selectFilter('User Role', role);
   }
 
-
-  // Select user account status
-  async selectUserStatus(status: string) {
+  async selectUserStatus(status: string): Promise<void> {
     await this.selectFilter('Status', status);
   }
 
-  // Verify filtered user status
-  
-  async expectUserStatus(status: string) {
-    const rows = this.page.locator(
-      '.oxd-table-body .oxd-table-row'
-    );
+  /**
+   * Read all actual user records from the current results table.
+   * Ignores the no-records placeholder row.
+   */
+  private async getUserRows(): Promise<UserRow[]> {
+    const rows = this.page.locator('.oxd-table-body .oxd-table-row');
 
-    await expect(rows.first()).toBeVisible();
+    return rows.evaluateAll(elements =>
+      elements.flatMap(row => {
+        const cells = Array.from(row.querySelectorAll('.oxd-table-cell'));
+        if (cells.length < 5) return [];
 
-    const rowCount = await rows.count();
-    let validRows = 0;
+        const text = (index: number) => (cells[index].textContent ?? '').trim();
+        const username = text(1);
+        const role = text(2);
+        const employeeName = text(3);
+        const status = text(4);
 
-    for (let i = 0; i < rowCount; i++) {
-      const cells = rows.nth(i).locator(
-        '.oxd-table-cell'
-      );
+        if (!username || /no records found/i.test(username)) return [];
 
-      if (await cells.count() < 5) {
-        continue;
-      }
-
-      await expect(
-        cells.nth(4)
-      ).toHaveText(status);
-
-      validRows++;
-    }
-
-    expect(validRows).toBeGreaterThan(0);
-  }
-  
-  // Verify combined User Role and Status filters
-  async expectUserRoleAndStatus(
-    role: string,
-    status: string
-  ) {
-    const rows = this.page.locator(
-      '.oxd-table-body .oxd-table-row'
-    );
-
-    await expect(rows.first()).toBeVisible();
-
-    const rowCount = await rows.count();
-    let validRows = 0;
-
-    for (let i = 0; i < rowCount; i++) {
-      const row = rows.nth(i);
-
-      const cells = row.locator(
-        '.oxd-table-cell'
-      );
-
-      const cellCount = await cells.count();
-
-      // Skip rows without all expected columns
-      if (cellCount < 5) {
-        continue;
-      }
-
-      // Index 2 = User Role
-      const roleCell = cells.nth(2);
-
-      // Index 4 = Status
-      const statusCell = cells.nth(4);
-
-      // Verify User Role
-      await expect(roleCell).toHaveText(role);
-
-      // Verify Status
-      await expect(statusCell).toHaveText(status);
-
-      validRows++;
-    }
-
-    // Ensure matching records exist
-    expect(validRows).toBeGreaterThan(0);
-  }
-
-  
-  // Select employee using autocomplete
-  async selectEmployeeName(employeeName: string) {
-
-    const employeeInput = this.page
-      .locator('.oxd-input-group')
-      .filter({
-        has: this.page.getByText(
-          'Employee Name',
-          { exact: true }
-        )
+        return [{ username, role, employeeName, status }];
       })
-      .locator('input');
+    );
+  }
 
-    // Validate employee name
-    expect(employeeName.trim()).not.toBe('');
-    expect(employeeName).not.toBe('First Last');
+  async expectUserRole(role: string): Promise<void> {
+    await expect.poll(
+      async () => {
+        const rows = await this.getUserRows();
+        return rows.length > 0 && rows.every(row => row.role === role);
+      },
+      { message: `Expected all returned user records to have role "${role}"` }
+    ).toBeTruthy();
+  }
 
-    // Verify input field
+  async expectUserStatus(status: string): Promise<void> {
+    await expect.poll(
+      async () => {
+        const rows = await this.getUserRows();
+        return rows.length > 0 && rows.every(row => row.status === status);
+      },
+      { message: `Expected all returned user records to have status "${status}"` }
+    ).toBeTruthy();
+  }
+
+  async expectUserRoleAndStatus(role: string, status: string): Promise<void> {
+    await expect.poll(
+      async () => {
+        const rows = await this.getUserRows();
+        return rows.length > 0 &&
+          rows.every(row => row.role === role && row.status === status);
+      },
+      {
+        message:
+          `Expected every returned user to have role "${role}" and status "${status}"`
+      }
+    ).toBeTruthy();
+  }
+
+  async selectEmployeeName(employeeName: string): Promise<void> {
+    const trimmedName = employeeName.trim();
+    expect(trimmedName, 'ORANGE_EMPLOYEE_NAME must not be empty').not.toBe('');
+    expect(trimmedName, 'Replace the placeholder employee name with a real employee').not.toBe('First Last');
+
+    const employeeInput = this.filterGroup('Employee Name').locator('input');
+    await expect(employeeInput).toHaveCount(1);
     await expect(employeeInput).toBeVisible();
+    await employeeInput.fill(trimmedName);
 
-    // Enter employee name
-    await employeeInput.fill(employeeName);
+    const suggestions = this.page.locator('.oxd-autocomplete-option');
+    const matchingSuggestion = suggestions.filter({ hasText: trimmedName });
 
-    // Locate autocomplete suggestions
-    const suggestions = this.page.locator(
-      '.oxd-autocomplete-option'
+    await expect(
+      matchingSuggestion.first(),
+      `No autocomplete suggestion matched "${trimmedName}". Check that this employee exists and is eligible.`
+    ).toBeVisible({ timeout: 15000 });
+
+    await matchingSuggestion.first().click();
+    await expect(employeeInput).toHaveValue(trimmedName);
+  }
+
+  /**
+   * Wait for the actual Admin Users API request to finish so assertions
+   * cannot inspect results left over from the previous filter.
+   */
+  async clickSearch(): Promise<void> {
+    const searchResponse = this.page.waitForResponse(
+      response =>
+        response.request().method() === 'GET' &&
+        response.url().includes('/api/v2/admin/users'),
+      { timeout: 20000 }
     );
 
-    // Wait for suggestions to appear
-    await expect(
-      suggestions.first(),
-      'No employee suggestions appeared. Verify that the employee exists.'
-    ).toBeVisible({
-      timeout: 15000
-    });
+    await this.page.getByRole('button', { name: 'Search', exact: true }).click();
 
-    // Find the matching employee
-    const matchingEmployee = suggestions.filter({
-      hasText: employeeName
-    });
+    const response = await searchResponse;
+    expect(
+      response.ok(),
+      `Admin users filter request failed with HTTP ${response.status()}`
+    ).toBeTruthy();
 
-    // Verify matching suggestion
-    await expect(
-      matchingEmployee.first(),
-      `No autocomplete suggestion matched: ${employeeName}`
-    ).toBeVisible();
-
-    // Select matching employee
-    await matchingEmployee.first().click();
-
-    // Verify selected employee
-    await expect(employeeInput).toHaveValue(
-      employeeName
-    );
+    await expect(this.page.locator('.oxd-table-body')).toBeVisible();
+    await expect(this.page.locator('.oxd-loading-spinner')).toBeHidden();
   }
-
-
-  // Click Search
-  async clickSearch() {
-    await this.page.getByRole('button', {
-      name: 'Search'
-    }).click();
-  }
-
-  // Verify filtered user results
-  
-async expectUserRole(role: string) {
-  const rows = this.page.locator(
-    '.oxd-table-body .oxd-table-row'
-  );
-
-  await expect(rows.first()).toBeVisible();
-
-  const rowCount = await rows.count();
-  let validRows = 0;
-
-  for (let i = 0; i < rowCount; i++) {
-    const row = rows.nth(i);
-    const cells = row.locator('.oxd-table-cell');
-
-    const cellCount = await cells.count();
-
-    // Skip rows that are not actual employee/user records
-    if (cellCount < 5) {
-      continue;
-    }
-
-    // Column index 1 = User Role
-    const roleCell = cells.nth(1);
-
-    await expect(roleCell).toHaveText(role);
-
-    validRows++;
-  }
-
-  // Ensure at least one actual user record was found
-  expect(validRows).toBeGreaterThan(0);
-
-  
-}}
+}
